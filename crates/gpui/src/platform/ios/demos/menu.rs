@@ -4,7 +4,7 @@
 
 use super::{
     AnimationPlayground, BACKGROUND, BLUE, GREEN, MAUVE, OVERLAY, PEACH, SUBTEXT, SURFACE,
-    ShaderShowcase, TEXT, TextEditor,
+    ShaderShowcase, TEAL, TEXT, TextEditor, DropZone,
 };
 use crate::{
     App, Bounds, Context, ElementInputHandler, Entity, Focusable, KeyDownEvent, MouseButton,
@@ -20,6 +20,7 @@ pub enum ActiveDemo {
     AnimationPlayground,
     ShaderShowcase,
     TextEditor,
+    DropZone,
 }
 
 /// Root application view that manages demo navigation
@@ -28,6 +29,7 @@ pub struct DemoApp {
     animation_playground: Option<AnimationPlayground>,
     shader_showcase: Option<ShaderShowcase>,
     text_editor: Option<Entity<TextEditor>>,
+    drop_zone: Option<Entity<DropZone>>,
     /// Bounds for text editor input handler
     text_editor_bounds: Option<Bounds<crate::Pixels>>,
 }
@@ -39,6 +41,7 @@ impl DemoApp {
             animation_playground: None,
             shader_showcase: None,
             text_editor: None,
+            drop_zone: None,
             text_editor_bounds: None,
         }
     }
@@ -76,11 +79,20 @@ impl DemoApp {
         println!("GPUI iOS: go_to_text_editor completed");
     }
 
+    fn go_to_drop_zone(&mut self, cx: &mut Context<Self>) {
+        println!("GPUI iOS: go_to_drop_zone called");
+        let zone = cx.new(|_cx| DropZone::new());
+        self.drop_zone = Some(zone);
+        self.active = ActiveDemo::DropZone;
+        cx.notify();
+    }
+
     fn go_to_menu(&mut self, cx: &mut Context<Self>) {
         self.active = ActiveDemo::Menu;
         self.animation_playground = None;
         self.shader_showcase = None;
         self.text_editor = None;
+        self.drop_zone = None;
         cx.notify();
     }
 
@@ -202,6 +214,7 @@ impl Render for DemoApp {
                 self.render_shader_showcase(window, cx).into_any_element()
             }
             ActiveDemo::TextEditor => self.render_text_editor(window, cx).into_any_element(),
+            ActiveDemo::DropZone => self.render_drop_zone(window, cx).into_any_element(),
         }
     }
 }
@@ -359,6 +372,37 @@ impl DemoApp {
                                 MouseButton::Left,
                                 cx.listener(|this, _, window, cx| {
                                     this.show_file_picker(window, cx);
+                                }),
+                            ),
+                    )
+                    // Drop Zone button
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .px_6()
+                            .py_4()
+                            .bg(rgb(SURFACE))
+                            .rounded_xl()
+                            .border_l_4()
+                            .border_color(rgb(TEAL))
+                            .child(
+                                div()
+                                    .text_xl()
+                                    .text_color(rgb(TEXT))
+                                    .child("Drop Zone"),
+                            )
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(rgb(SUBTEXT))
+                                    .child("Drag & drop files from Files app"),
+                            )
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(|this, _, _, cx| {
+                                    this.go_to_drop_zone(cx);
                                 }),
                             ),
                     ),
@@ -629,6 +673,24 @@ impl DemoApp {
                         })
                         .into_any_element()
                 })
+            } else {
+                div().into_any_element()
+            })
+            .child(back_button(cx.listener(|this, _, _window, cx| {
+                this.go_to_menu(cx);
+            })))
+            .into_any_element()
+    }
+
+    fn render_drop_zone(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> crate::AnyElement {
+        div()
+            .size_full()
+            .child(if let Some(drop_zone) = &self.drop_zone {
+                drop_zone.clone().into_any_element()
             } else {
                 div().into_any_element()
             })

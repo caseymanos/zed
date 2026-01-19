@@ -20,7 +20,7 @@ use crate::{
 use anyhow::Result;
 use core_graphics::{
     base::CGFloat,
-    geometry::{CGPoint, CGRect, CGSize},
+    geometry::{CGRect, CGSize},
 };
 use objc::{
     class,
@@ -251,6 +251,14 @@ fn register_metal_view_class() -> &'static Class {
                 println!("GPUI iOS: Added UITextInput protocol to GPUIMetalView");
             } else {
                 println!("GPUI iOS: Failed to get UITextInput protocol!");
+            }
+
+            // Add UIDropInteractionDelegate protocol for drag and drop support
+            if let Some(protocol) = Protocol::get("UIDropInteractionDelegate") {
+                decl.add_protocol(protocol);
+                println!("GPUI iOS: Added UIDropInteractionDelegate protocol to GPUIMetalView");
+            } else {
+                println!("GPUI iOS: UIDropInteractionDelegate protocol not found (iOS 11+ required)");
             }
         }
 
@@ -1388,6 +1396,35 @@ fn register_metal_view_class() -> &'static Class {
                 sel!(setBaseWritingDirection:forRange:),
                 set_base_writing_direction as extern "C" fn(&mut Object, Sel, i64, *mut Object),
             );
+
+            // ============================================
+            // UIDropInteractionDelegate Protocol Methods
+            // ============================================
+            decl.add_method(
+                sel!(dropInteraction:canHandleSession:),
+                super::drag_drop::drop_interaction_can_handle
+                    as extern "C" fn(&Object, Sel, *mut Object, *mut Object) -> BOOL,
+            );
+            decl.add_method(
+                sel!(dropInteraction:sessionDidEnter:),
+                super::drag_drop::drop_interaction_session_did_enter
+                    as extern "C" fn(&Object, Sel, *mut Object, *mut Object),
+            );
+            decl.add_method(
+                sel!(dropInteraction:sessionDidUpdate:),
+                super::drag_drop::drop_interaction_session_did_update
+                    as extern "C" fn(&Object, Sel, *mut Object, *mut Object) -> *mut Object,
+            );
+            decl.add_method(
+                sel!(dropInteraction:sessionDidExit:),
+                super::drag_drop::drop_interaction_session_did_exit
+                    as extern "C" fn(&Object, Sel, *mut Object, *mut Object),
+            );
+            decl.add_method(
+                sel!(dropInteraction:performDrop:),
+                super::drag_drop::drop_interaction_perform_drop
+                    as extern "C" fn(&Object, Sel, *mut Object, *mut Object),
+            );
         }
 
         decl.register();
@@ -1505,7 +1542,8 @@ pub(crate) struct IosWindow {
     /// Note: pub(super) to allow ffi.rs to access this for the display link callback
     pub(super) request_frame_callback: RefCell<Option<Box<dyn FnMut(RequestFrameOptions)>>>,
     /// Callback for input events
-    input_callback: RefCell<Option<Box<dyn FnMut(PlatformInput) -> DispatchEventResult>>>,
+    /// Note: pub(super) to allow drag_drop.rs to dispatch file drop events
+    pub(super) input_callback: RefCell<Option<Box<dyn FnMut(PlatformInput) -> DispatchEventResult>>>,
     /// Callback for active status changes
     active_status_callback: RefCell<Option<Box<dyn FnMut(bool)>>>,
     /// Callback for hover status changes (not really applicable on iOS)
@@ -1593,6 +1631,13 @@ impl IosWindow {
             // Enable user interaction on the Metal view for touch handling
             let _: () = msg_send![view, setUserInteractionEnabled: YES];
             let _: () = msg_send![view, setMultipleTouchEnabled: YES];
+
+            // Add UIDropInteraction for drag and drop support
+            // The view is its own delegate (implements UIDropInteractionDelegate)
+            let drop_interaction: *mut Object = msg_send![class!(UIDropInteraction), alloc];
+            let drop_interaction: *mut Object = msg_send![drop_interaction, initWithDelegate: view];
+            let _: () = msg_send![view, addInteraction: drop_interaction];
+            log::info!("GPUI iOS: Added UIDropInteraction to view for drag and drop support");
 
             // Set the view as the view controller's view
             let _: () = msg_send![view_controller, setView: view];

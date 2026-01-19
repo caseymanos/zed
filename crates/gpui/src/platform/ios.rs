@@ -10,6 +10,7 @@
 pub mod demos;
 mod dispatcher;
 mod display;
+mod drag_drop;
 mod events;
 pub mod ffi;
 mod file_picker;

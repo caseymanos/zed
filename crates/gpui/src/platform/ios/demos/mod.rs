@@ -4,11 +4,13 @@
 //! rendering and input handling on iOS.
 
 mod animation_playground;
+mod drop_zone;
 mod menu;
 mod shader_showcase;
 mod text_editor;
 
 pub use animation_playground::AnimationPlayground;
+pub use drop_zone::DropZone;
 pub use menu::{DemoApp, back_button};
 pub use shader_showcase::ShaderShowcase;
 pub use text_editor::TextEditor;
